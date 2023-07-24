@@ -1,0 +1,38 @@
+version: '2.2'
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper:3.4.6
+    ports:
+      - "2181:2181"
+
+#  jobmanager:
+#    image: myflinkjob:latest
+#    ports:
+#      - "8081:8081"
+#    command: jobmanager
+##    volumes:
+##      - /path/to/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+#    environment:
+#      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+
+  jobmanager:
+    image: myflinkjob:latest
+    ports:
+      - "8081:8081"
+    command: standalone-job --job-classname com.raju.Main --job-classpath file:///opt/flink/usrlib/myjob.jar
+#    command: standalone-session --job-classname com.raju.Main --job-classpath file:///opt/flink/usrlib/myjob.jar
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - HIGH_AVAILABILITY=zookeeper
+      - ZOOKEEPER_HOSTS=zookeeper:2181
+  taskmanager:
+    image: myflinkjob:latest
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    links:
+      - "jobmanager:jobmanager"
+#    volumes:
+#      - /path/to/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
