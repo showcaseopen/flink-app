@@ -3,11 +3,14 @@ package com.raju;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.formats.parquet.avro.ParquetAvroWriters;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -24,6 +27,8 @@ public class Main {
 
         String inputPath = params.getRequired("input");
         String outputPath = params.getRequired("output");
+        String outputDirectory = params.getRequired("outputDirectory");
+        String inputDirectory = params.getRequired("inputDirectory");
 
 
         // Get the execution environment
@@ -33,15 +38,21 @@ public class Main {
         if (inputPath.startsWith("s3://")) {
             source = new S3SourceFunction<>(inputPath, "", MyPojoInput.class);
         } else {
-            source = new FileSourceFunction<>(inputPath, MyPojoInput.class);
+//            source = new FileSourceFunction<>(inputPath, MyPojoInput.class);
+            source = new DirectoryWatchSourceFunction<>(inputDirectory, MyPojoInput.class);
         }
 
-        SinkFunction<MyPojoOutput> sink;
+        SinkFunction<MyPojoOutput> fixedFileSink;
         if (outputPath.startsWith("s3://")) {
-            sink = new S3SinkFunction<>(outputPath, "");
+            fixedFileSink = new S3SinkFunction<>(outputPath, "");
         } else {
-            sink = new FileSinkFunction<>(outputPath);
+            fixedFileSink = new FileSinkFunction<>(outputPath);
+
         }
+
+        final StreamingFileSink<MyPojoOutput> dirSink = StreamingFileSink
+                .forBulkFormat(new Path(outputDirectory), ParquetAvroWriters.forReflectRecord(MyPojoOutput.class))
+                .build();
 
 
         DataStream<MyPojoInput> inputStream = env.addSource(source).returns(TypeInformation.of(MyPojoInput.class));
@@ -50,7 +61,9 @@ public class Main {
         DataStream<MyPojoOutput> transformedStream = inputStream
                 .map((MapFunction<MyPojoInput, MyPojoOutput>) Main::getMyPojoOutput);
 
-        transformedStream.addSink(sink);
+//        transformedStream.addSink(fixedFileSink);
+        transformedStream.addSink(dirSink);
+        transformedStream.print();
 
         env.execute("Flink Streaming Job");
     }

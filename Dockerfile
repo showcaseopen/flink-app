@@ -14,6 +14,7 @@ COPY src/main/resources/dataworkspace/ /dataworkspace/
 
 COPY src/main/resources/config_local.properties /config.properties
 
+COPY log4j2.properties /opt/flink/conf/
 
 # Set the working directory back to /opt/flink
 WORKDIR /opt/flink
